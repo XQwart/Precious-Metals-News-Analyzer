@@ -229,6 +229,7 @@ class MetalsNewsParser:
                 'title': item.title,
                 'url': item.url,
                 'source': item.source,
+                'metals': item.metals,
                 'published': item.published,
                 'ai_summary': item.ai_summary,
                 'relevance_score': item.relevance_score

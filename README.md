@@ -1,205 +1,73 @@
-#  Анализатор новостей по драгоценным металлам
+# Precious Metals News Analyzer
 
-![Python](https://img.shields.io/badge/python-v3.10.5+-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Status](https://img.shields.io/badge/status-active-brightgreen.svg)
+A news pipeline that collects Russian financial news from RSS feeds, finds articles about gold, silver, platinum and palladium as commodities or investments, and summarizes them with an LLM.
 
-Интеллектуальный парсер новостей, который автоматически находит и анализирует новости о драгоценных металлах (золото, серебро, платина, палладий) с использованием AI модели DeepSeek.
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
+![OpenRouter](https://img.shields.io/badge/LLM-DeepSeek_via_OpenRouter-4D6BFE?style=flat-square)
+![BeautifulSoup](https://img.shields.io/badge/BeautifulSoup-scraping-43B02A?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
-## ✨ Возможности
-
--  **Многоисточниковый парсинг** - обработка RSS лент от ведущих финансовых изданий
--  **AI-анализ с DeepSeek** - точное определение релевантности через OpenRouter API
--  **Двухуровневая фильтрация** - предфильтр по ключевым словам + глубокий AI анализ
--  **Детальная аналитика** - статистика обработки и эффективности
--  **Структурированный вывод** - сохранение в JSON с метаданными
--  **Оптимизированная обработка** - экономия API запросов до 70%
-
-##  Архитектура системы
+## How it works
 
 ```mermaid
-graph TD
-    A[ RSS Источники] --> B[ RSS Parser]
-    B --> C[ Временной фильтр]
-    C --> D[ Предфильтр]
-    D --> E[ Извлечение контента]
-    E --> F[ DeepSeek AI]
-    F --> G[ JSON результат]
+flowchart LR
+    A[RSS feeds<br/>RBC, Finam, Investing.com, Vedomosti] --> B[Time window filter]
+    B --> C[Keyword pre-filter]
+    C -->|candidate| D[Full-text extraction]
+    D --> E[DeepSeek relevance check<br/>and summary]
+    E -->|relevant| F[metals_news.json]
+    C -->|no metal keywords| X[skipped]
+    E -->|figurative use| X
 ```
 
-### 📦 Модульная структура
+1. **Collect.** `feedparser` reads each source's RSS feed and keeps entries inside the time window (24 h by default, 7 days in `main.py`).
+2. **Pre-filter.** A cheap keyword pass with word stems for each metal in Russian and English drops most articles before any API call.
+3. **Extract.** The article page is fetched, and the body text is pulled out with BeautifulSoup by trying a list of common article selectors.
+4. **Analyze.** The LLM gets the title and text and returns strict JSON: `is_relevant`, `metals`, `summary`, `score`, `reason`. The prompt tells it to reject figurative uses such as "golden medal" or "silver medalist". If the API isn't available, a fallback that checks for economic terms takes over.
+5. **Save.** Relevant items go to `metals_news.json` along with run metadata: how many metals were mentioned, the average relevance and processing stats per stage.
 
-| Модуль | Назначение |
-|--------|------------|
-| `parser.py` | Основной парсер RSS лент |
-| `filters.py` | Предварительная фильтрация по ключевым словам |
-| `extractor.py` | Извлечение полного текста статей |
-| `analyzer.py` | AI анализ через DeepSeek на OpenRouter |
-| `models.py` | Модели данных и структуры |
+## Modules
 
-## 🚀 Быстрый старт
+| File | Responsibility |
+|------|----------------|
+| `parser.py` | `MetalsNewsParser`: source registry, RSS parsing, orchestration, stats, JSON export |
+| `filters.py` | `NewsPreFilter`: keyword dictionaries and the pre-filter |
+| `extractor.py` | `ContentExtractor`: fetches article pages and extracts their text |
+| `analyzer.py` | `OpenRouterAnalyzer`: LLM calls, response parsing, fallback |
+| `main.py` | CLI entry point: logging, `.env` check, run |
 
-### Установка
+## Getting started
 
 ```bash
-# Клонируем репозиторий
 git clone https://github.com/XQwart/Precious-Metals-News-Analyzer.git
 cd Precious-Metals-News-Analyzer
-
-# Устанавливаем зависимости
 pip install -r requirements.txt
-```
-
-### Настройка API ключа
-
-Получите API ключ на [OpenRouter.ai](https://openrouter.ai/) и добавьте в переменные окружения:
-
-```bash
-export OPENROUTER_API_KEY="your_api_key_here"
-```
-
-Или создайте файл `.env`:
-```
-OPENROUTER_API_KEY=your_api_key_here
-```
-
-### Запуск
-
-```bash
+cp .env.example .env        # set OPENROUTER_API_KEY
 python main.py
 ```
 
-## 📖 Использование
-
-### Базовый запуск
+Or use it as a library:
 
 ```python
 from parser import MetalsNewsParser
 
-# Создаем парсер
 parser = MetalsNewsParser()
-
-# Парсим новости за последние 24 часа  
-news_items = parser.parse_all_sources(max_age_hours=24)
-
-# Сохраняем результаты
-filename = parser.save_to_json(news_items)
-print(f"Сохранено в {filename}")
+items = parser.parse_all_sources(max_age_hours=24)
+parser.save_to_json(items)
 ```
 
-### Настройка временных рамок
+## Output
 
-```python
-# Новости за последнюю неделю
-news_items = parser.parse_all_sources(max_age_hours=168)
-
-# Новости за последний месяц
-news_items = parser.parse_all_sources(max_age_hours=720)
-```
-
-### Тестирование фильтров
-
-```bash
-python test_filters.py
-```
-
-## ⚙️ Конфигурация
-
-### Ключевые слова для фильтрации
-
-```python
-metal_keywords = {
-    'золото': ['золот', 'gold', 'au', ...],
-    'серебро': ['серебр', 'silver', 'ag', ...],
-    'платина': ['платин', 'platinum', 'pt', ...],
-    'палладий': ['палладий', 'palladium', 'pd', ...]
+```json
+{
+  "metadata": {"parsed_at": "...", "total_news": 12, "model": "deepseek/deepseek-chat", "...": "..."},
+  "news": [
+    {"title": "...", "url": "...", "source": "...", "metals": ["gold"], "published": "...",
+     "ai_summary": "...", "relevance_score": 0.9}
+  ]
 }
 ```
 
-## 📁 Структура проекта
+## License
 
-```
-metals-news-parser/
-├── parser.py            # Основной парсер
-├── filters.py           # Предварительные фильтры
-├── extractor.py         # Извлечение контента
-├── analyzer.py          # AI анализатор
-├── models.py            # Модели данных
-├── requirements.txt     # Зависимости
-├── metals_news.json     # Результаты (создается автоматически)
-└── README.md           # Документация
-```
-
-## 📊 Пример вывода
-
-```
-🚀 МОДУЛЬНЫЙ DEEPSEEK ПАРСЕР ДРАГОЦЕННЫХ МЕТАЛЛОВ
-================================================================
-🤖 AI: DeepSeek через OpenRouter.ai
-📊 Релевантных новостей: 5
-🎯 Средняя релевантность: 0.87
-
-📈 ЭФФЕКТИВНОСТЬ ОБРАБОТКИ:
-   Всего проверено: 247
-   Предфильтр исключил: 198
-   AI проанализировал: 49
-   Итого релевантных: 5
-   Точность AI: 10.2%
-   Экономия API: 80.2%
-
-🥇 ПО МЕТАЛЛАМ:
-   Золото: 3
-   Серебро: 1
-   Платина: 1
-
-🏆 ТОП-3 НОВОСТИ:
-1. Цены на золото достигли исторического максимума
-   📊 Релевантность: 0.95 | 🏢 РБК Экономика
-   
-2. Центробанк увеличил покупки золота на 15%
-   📊 Релевантность: 0.88 | 🏢 Финам
-```
-
-## 🔧 Устранение неполадок
-
-### Частые проблемы
-
-**❌ Ошибка "RSS document declared as us-ascii"**
-```
-Решение: Это предупреждение, не влияет на работу
-```
-
-**❌ Нет новостей из всех источников**
-```bash
-# Проверьте доступность RSS лент
-python -c "import feedparser; print(feedparser.parse('https://rssexport.rbc.ru/rbcnews/news/20/full.rss'))"
-```
-
-**❌ AI анализатор не работает**
-```bash
-# Проверьте API ключ
-echo $OPENROUTER_API_KEY
-```
-
-### Отладка
-
-Включите подробное логирование:
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-```
-
-## 🔑 Получение API ключа OpenRouter
-
-1. Зарегистрируйтесь на [OpenRouter.ai](https://openrouter.ai/)
-2. Создайте API ключ в разделе "Keys"
-3. Добавьте ключ в переменные окружения
-
-**Стоимость**: ~$0.002 за анализ одной новости
-
-## 📝 Лицензия
-
-Этот проект лицензирован под MIT License - см. файл [LICENSE](LICENSE) для подробностей
-
-
+MIT
