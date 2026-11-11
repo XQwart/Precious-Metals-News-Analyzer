@@ -1,0 +1,4 @@
+__pycache__/
+.env
+logs/
+metals_news.json

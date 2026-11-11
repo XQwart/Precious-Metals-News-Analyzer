@@ -8,7 +8,7 @@ from typing import List, Dict
 from dataclasses import dataclass
 
 from filters import NewsPreFilter
-from analyzer import OpenRouterAnalyzer
+from analyzer import LLMAnalyzer
 from extractor import ContentExtractor
 
 logger = logging.getLogger(__name__)
@@ -33,11 +33,11 @@ class MetalsNewsParser:
         self.content_extractor = ContentExtractor()
         
         try:
-            self.ai_analyzer = OpenRouterAnalyzer()
+            self.ai_analyzer = LLMAnalyzer()
             if not self.ai_analyzer.test_connection():
-                logger.warning("Проблемы с OpenRouter, будет использован fallback")
+                logger.warning("Проблемы с LLM API, будет использован fallback")
         except Exception as e:
-            logger.error(f"Ошибка инициализации OpenRouter: {e}")
+            logger.error(f"Ошибка инициализации LLM API: {e}")
             self.ai_analyzer = None
         
         self.news_sources = {
@@ -77,17 +77,17 @@ class MetalsNewsParser:
         news_items = []
         
         try:
-            logger.info(f"📡 Парсинг RSS: {rss_url}")
+            logger.info(f"Парсинг RSS: {rss_url}")
             
             feed = feedparser.parse(rss_url)
             
             if feed.bozo:
-                logger.warning(f"⚠️ Проблемы с RSS: {feed.bozo_exception}")
+                logger.warning(f"Проблемы с RSS: {feed.bozo_exception}")
             
-            logger.info(f"📊 RSS содержит {len(feed.entries)} записей")
+            logger.info(f"RSS содержит {len(feed.entries)} записей")
             
             cutoff_time = datetime.now() - timedelta(hours=max_age_hours)
-            logger.info(f"⏰ Ищем новости после: {cutoff_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Ищем новости после: {cutoff_time.strftime('%Y-%m-%d %H:%M:%S')}")
             
             filtered_by_time = 0
             
@@ -123,13 +123,13 @@ class MetalsNewsParser:
                         self.stats['pre_filtered_out'] += 1
                         continue
                     
-                    logger.info(f"✅ Предфильтр пройден: {title[:50]}... (металлы: {', '.join(preliminary_metals)})")
+                    logger.info(f"Предфильтр пройден: {title[:50]}... (металлы: {', '.join(preliminary_metals)})")
                     
                     full_content = self.content_extractor.extract_article_content(url)
                     content_for_analysis = f"{title} {summary} {full_content}"
                     
                     self.stats['ai_analyzed'] += 1
-                    logger.info(f"🤖 DeepSeek анализ: {title[:50]}...")
+                    logger.info(f"LLM-анализ: {title[:50]}...")
                     
                     if self.ai_analyzer:
                         analysis = self.ai_analyzer.analyze_news(title, content_for_analysis, preliminary_metals)
@@ -140,7 +140,7 @@ class MetalsNewsParser:
                         }
                     
                     if not analysis.get('is_relevant', False):
-                        logger.info(f"❌ DeepSeek отклонил: {analysis.get('reason', 'не релевантно')}")
+                        logger.info(f"LLM отклонил: {analysis.get('reason', 'не релевантно')}")
                         continue
                     
                     self.stats['relevant_found'] += 1
@@ -155,7 +155,7 @@ class MetalsNewsParser:
                     )
                     
                     news_items.append(news_item)
-                    logger.info(f"✅ ПРИНЯТО: {title[:60]}... (score: {analysis.get('score', 0):.2f})")
+                    logger.info(f"ПРИНЯТО: {title[:60]}... (score: {analysis.get('score', 0):.2f})")
                     
                     time.sleep(1.5)
                     
@@ -169,7 +169,7 @@ class MetalsNewsParser:
         if 'filtered_by_time' not in locals():
             filtered_by_time = 0
         
-        logger.info(f"📈 RSS статистика: всего={len(feed.entries) if 'feed' in locals() else 0}, отфильтровано по времени={filtered_by_time}, найдено релевантных={len(news_items)}")
+        logger.info(f"RSS статистика: всего={len(feed.entries) if 'feed' in locals() else 0}, отфильтровано по времени={filtered_by_time}, найдено релевантных={len(news_items)}")
         
         return news_items
 
@@ -177,10 +177,10 @@ class MetalsNewsParser:
         """Парсит все источники с подробной статистикой"""
         all_news = []
         
-        logger.info("🚀 Начинаем модульный парсинг новостей")
+        logger.info("Начинаем модульный парсинг новостей")
         
         for source_key, source_data in self.news_sources.items():
-            logger.info(f"📰 Обработка источника: {source_data['name']}")
+            logger.info(f"Обработка источника: {source_data['name']}")
             source_news = []
             
             for rss_url in source_data['rss_urls']:
@@ -192,7 +192,7 @@ class MetalsNewsParser:
                     logger.error(f"Ошибка источника {source_key}: {e}")
             
             all_news.extend(source_news)
-            logger.info(f"📊 Источник {source_data['name']}: {len(source_news)} релевантных новостей")
+            logger.info(f"Источник {source_data['name']}: {len(source_news)} релевантных новостей")
         
         seen_urls = set()
         unique_news = []
@@ -205,12 +205,12 @@ class MetalsNewsParser:
         
         self.print_processing_stats()
         
-        logger.info(f"🎯 Всего уникальных релевантных новостей: {len(unique_news)}")
+        logger.info(f"Всего уникальных релевантных новостей: {len(unique_news)}")
         return unique_news
 
     def print_processing_stats(self):
         """Выводит детальную статистику обработки"""
-        logger.info("📊 СТАТИСТИКА ОБРАБОТКИ:")
+        logger.info("СТАТИСТИКА ОБРАБОТКИ:")
         logger.info(f"   Всего обработано новостей: {self.stats['total_processed']}")
         logger.info(f"   Отфильтровано предфильтром: {self.stats['pre_filtered_out']}")
         logger.info(f"   Отправлено на AI анализ: {self.stats['ai_analyzed']}")
@@ -239,8 +239,8 @@ class MetalsNewsParser:
             'metadata': {
                 'parsed_at': datetime.now().isoformat(),
                 'total_news': len(news_items),
-                'ai_provider': 'DeepSeek via OpenRouter.ai',
-                'model': 'deepseek/deepseek-chat',
+                'api_base_url': str(self.ai_analyzer.client.base_url) if self.ai_analyzer else None,
+                'model': self.ai_analyzer.model if self.ai_analyzer else None,
                 'sources_count': len(set(item.source for item in news_items)),
                 'metals_distribution': self.get_metals_stats(news_items),
                 'average_relevance': sum(item.relevance_score for item in news_items) / len(news_items) if news_items else 0,
@@ -252,7 +252,7 @@ class MetalsNewsParser:
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(result, f, ensure_ascii=False, indent=2, sort_keys=True)
         
-        logger.info(f"💾 Новости сохранены: {filename}")
+        logger.info(f"Новости сохранены: {filename}")
         return filename
 
     def get_metals_stats(self, news_items: List[NewsItem]) -> Dict[str, int]:
@@ -266,15 +266,15 @@ class MetalsNewsParser:
     def print_summary(self, news_items: List[NewsItem]):
         """Выводит подробную сводку"""
         print(f"\n{'='*80}")
-        print(f"🚀 МОДУЛЬНЫЙ DEEPSEEK ПАРСЕР ДРАГОЦЕННЫХ МЕТАЛЛОВ")
+        print(f"ПАРСЕР НОВОСТЕЙ О ДРАГОЦЕННЫХ МЕТАЛЛАХ")
         print(f"{'='*80}")
-        print(f"🤖 AI: DeepSeek через OpenRouter.ai")
-        print(f"📊 Релевантных новостей: {len(news_items)}")
+        print(f"Модель: {self.ai_analyzer.model if self.ai_analyzer else 'нет, резервный анализ'}")
+        print(f"Релевантных новостей: {len(news_items)}")
         
         if news_items:
-            print(f"🎯 Средняя релевантность: {sum(item.relevance_score for item in news_items) / len(news_items):.2f}")
+            print(f"Средняя релевантность: {sum(item.relevance_score for item in news_items) / len(news_items):.2f}")
         
-        print(f"\n📈 ЭФФЕКТИВНОСТЬ ОБРАБОТКИ:")
+        print(f"\nЭФФЕКТИВНОСТЬ ОБРАБОТКИ:")
         print(f"   Всего проверено: {self.stats['total_processed']}")
         print(f"   Предфильтр исключил: {self.stats['pre_filtered_out']}")
         print(f"   AI проанализировал: {self.stats['ai_analyzed']}")
@@ -288,7 +288,7 @@ class MetalsNewsParser:
         
         metals_stats = self.get_metals_stats(news_items)
         if metals_stats:
-            print(f"\n🥇 ПО МЕТАЛЛАМ:")
+            print(f"\nПО МЕТАЛЛАМ:")
             for metal, count in metals_stats.items():
                 print(f"   {metal.capitalize()}: {count}")
         
@@ -297,16 +297,16 @@ class MetalsNewsParser:
             sources_stats[item.source] = sources_stats.get(item.source, 0) + 1
         
         if sources_stats:
-            print(f"\n📰 ПО ИСТОЧНИКАМ:")
+            print(f"\nПО ИСТОЧНИКАМ:")
             for source, count in sources_stats.items():
                 print(f"   {source}: {count}")
         
         if news_items:
-            print(f"\n🏆 ТОП-3 НОВОСТИ:")
+            print(f"\nТОП-3 НОВОСТИ:")
             for i, item in enumerate(news_items[:3], 1):
                 print(f"\n{i}. {item.title}")
-                print(f"   📊 Релевантность: {item.relevance_score:.2f} | 🏢 {item.source}")
+                print(f"   Релевантность: {item.relevance_score:.2f} | {item.source}")
                 if item.ai_summary:
-                    print(f"   🤖 {item.ai_summary}")
+                    print(f"   {item.ai_summary}")
         
         print(f"\n{'='*80}\n")
